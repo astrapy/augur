@@ -1,0 +1,80 @@
+# Invariants for crAPI (https://github.com/OWASP/crAPI).
+# Targets the known classes of bugs the application ships with on purpose.
+# Use as a starting point. Tighten rules to your data shape if you fork
+# crAPI for a workshop.
+
+invariants:
+  - name: bola-vehicles-no-cross-user-leak
+    endpoint: "GET /identity/api/v2/vehicle/*"
+    rule: >
+      The response must not contain vehicle data (vin, pincode, model,
+      owner email, owner id) belonging to a user other than the
+      authenticated requester. If the response includes any owner
+      identifier or email, it must match the requester.
+    severity: critical
+
+  - name: bola-orders-no-cross-user-leak
+    endpoint: "GET /workshop/api/shop/orders/*"
+    rule: >
+      The response must not include order details, customer email, or
+      transaction ids that belong to another user. The order's user
+      reference must match the authenticated requester.
+    severity: critical
+
+  - name: mass-assignment-profile-forbidden-fields
+    endpoint: "POST /identity/api/v2/user/dashboard"
+    rule: >
+      The response must not show that any of these fields were accepted
+      from the request body: 'role', 'is_admin', 'isAdmin', 'verified',
+      'email_verified', 'available_credit', 'video_id'. If a forbidden
+      field appears at a value the requester could not legitimately set,
+      that is a mass-assignment bug.
+    severity: high
+
+  - name: sensitive-data-exposure-orders
+    endpoint: "GET /workshop/api/shop/orders/all"
+    rule: >
+      The response must not return orders, payment information, or user
+      records belonging to other customers. A non-admin requester pulling
+      this endpoint and receiving more than their own orders is a
+      sensitive data exposure.
+    severity: critical
+
+  - name: jwt-in-response-body
+    endpoint: "* /*"
+    rule: >
+      No JSON value in the response body should be a JWT. A JWT is a
+      string of three base64url segments separated by dots whose first
+      segment decodes to a JSON header containing an 'alg' field. Tokens
+      belong in cookies or response headers, never in arbitrary resource
+      bodies.
+    severity: high
+
+  - name: ssrf-mechanic-contact
+    endpoint: "POST /workshop/api/merchant/contact_mechanic"
+    rule: >
+      The response must not include text that indicates the server
+      successfully fetched an attacker-supplied URL. Signs of SSRF
+      include cloud metadata service responses (for example fields
+      named 'instance-id', 'iam', 'security-credentials'), localhost
+      banners, or fetched HTML from internal hostnames.
+    severity: high
+
+  - name: bfla-admin-endpoint-non-admin-access
+    endpoint: "* /admin/*"
+    rule: >
+      Any response with a 2xx status to an /admin/ endpoint must indicate
+      that the requester holds an administrator role. If the response
+      contains administrative data (user lists, mechanic management,
+      coupon administration, video management) and the requester is a
+      regular user, that is broken function-level authorization.
+    severity: critical
+
+  - name: bfla-coupon-validate-non-admin
+    endpoint: "POST /community/api/v2/coupon/validate-coupon"
+    rule: >
+      A non-admin requester must not be able to enumerate or validate
+      coupons that were not issued to them. A successful response that
+      reveals coupon amount or validity for an arbitrary code submitted
+      by a regular user is a function-level authorization failure.
+    severity: high
